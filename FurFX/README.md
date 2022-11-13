@@ -1,0 +1,2 @@
+# FurFX
+This has been my biggest swiss knife tool I've written yet, it is a bit too extensive to explain here, but it lets you compose sound effects in Furnace Tracker, copy that data to the clipboard, and get output data for a bunch of Game Boy SFX drivers. Check the python file itself for more usage info.
