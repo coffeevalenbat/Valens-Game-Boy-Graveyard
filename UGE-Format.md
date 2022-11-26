@@ -8,7 +8,7 @@
 | `int8` | 1 | Ranges from -127 to 127.|
 | `bool` | 1 | If not-zero, then True.|
 | `shortstring` | 256 | Consists of a byte defining the readable length and then 255 characters. |
-| `string` | - | A stream oc characters, with 0x00 being the terminator value. |
+| `string` | - | A stream of characters, with 0x00 being the terminator value. |
 
 All types are little endian unless noted otherwise.
 
@@ -151,5 +151,6 @@ All types are little endian unless noted otherwise.
 	 - `uint32` Off by one bug filler (0)
 
 ## Routines
+**TODO: This might still be wrong :p**
  - Repeat 16 times:
 	 - `string` Routine code data
