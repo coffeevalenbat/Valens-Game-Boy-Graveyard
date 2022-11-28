@@ -49,9 +49,6 @@ All types are little endian unless noted otherwise.
 				 - `uint8` Effect parameter
 	 - If `Version number` >= 4 and `Version number` < 6:
 		 - Repeat 6 times:
-			 - `int8` Noise macro data
-	 - If `Version number` >= 4 and `Version number` < 6:
-		 - Repeat 6 times:
 			 - `int8` unused
 
 ## Wave Instruments
@@ -85,7 +82,7 @@ All types are little endian unless noted otherwise.
 				 - `uint8` Effect parameter
 	 - If `Version number` >= 4 and `Version number` < 6:
 		 - Repeat 6 times:
-			 - `int8` Noise macro data
+			 - `int8` Unused
 
 ## Noise Instruments
 
