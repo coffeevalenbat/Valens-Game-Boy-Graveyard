@@ -1,7 +1,7 @@
 include "include/hardware.inc"
 include "include/hUGE.inc"
 
-add_a_to_r16: MACRO
+MACRO add_a_to_r16
     add LOW(\1)
     ld LOW(\1), a
     adc HIGH(\1)
@@ -10,7 +10,7 @@ add_a_to_r16: MACRO
 ENDM
 
 ;; Thanks PinoBatch!
-sub_from_r16: MACRO ;; (high, low, value)
+MACRO sub_from_r16 ;; (high, low, value)
     ld a, \2
     sub \3
     ld \2, a
@@ -19,12 +19,12 @@ sub_from_r16: MACRO ;; (high, low, value)
     ld \1, a
 ENDM
 
-retMute: MACRO
+MACRO retMute
     bit \1, a
     ret nz
 ENDM
 
-checkMute: MACRO
+MACRO checkMute
     ld a, [mute_channels]
     bit \1, a
     jr nz, \2
@@ -153,6 +153,12 @@ newcharmap huge_ascii ; Ensure ASCII
 db "HUGEDRIVER V6 BY SUPERDISK - PLUG BY CVB"
 popc
 
+IF DEF(GBDK)
+_hUGE_init::
+    ld h, d
+    ld l, e
+ENDC
+
 ;;; Sets up hUGEDriver to play a song.
 ;;; !!! BE SURE THAT `hUGE_dosound` WILL NOT BE CALLED WHILE THIS RUNS !!!
 ;;; Param: HL = Pointer to the "song descriptor" you wish to load (typically exported by hUGETracker).
@@ -245,6 +251,11 @@ ENDC
     inc de
     ret
 
+IF DEF(GBDK)
+_hUGE_mute_channel::
+    ld b, a
+    ld c, e
+ENDC
 
 ;;; Sets a channel's muting status.
 ;;; Muted channels are left entirely alone by the driver, so that you can repurpose them,
@@ -515,6 +526,12 @@ play_ch3_note:
     ;; To avoid this, we kill the wave channel (0 → NR30), then re-enable it.
     ;; This way, CH3 will be paused when we trigger it by writing to NR34.
     ;; TODO: what if `highmask3` bit 7 is not set, though?
+
+    ldh a, [rAUDTERM]
+    push af
+    and %10111011
+    ldh [rAUDTERM], a
+
     xor a
     ldh [rAUD3ENA], a
     cpl
@@ -529,6 +546,10 @@ play_ch3_note:
     ld a, [highmask3]
     or [hl]
     ldh [rAUD3HIGH], a
+
+    pop af
+    ldh [rAUDTERM], a
+
     ret
 
 play_ch4_note:
@@ -717,18 +738,11 @@ fx_call_routine:
     ld h, [hl]
     ld l, a
 
+    ld d, b
+    ld e, c ; SDCC compatibility
+
     ld a, [tick]
     or a ; set zero flag if tick 0 for compatibility
-IF DEF(GBDK) ; Pass the tick counter as a SDCC call parameter
-    push af
-    inc sp
-    push bc
-    call .call_hl
-    add sp, 3
-    ret
-
-.call_hl:
-ENDC
     jp hl
 
 
@@ -778,17 +792,21 @@ fx_set_duty:
     ldh [rAUD2LEN], a
     ret
 .chan4:
-    retMute 4
+    retMute 3
     ldh a, [rAUD4POLY]
     res 3, a
     or c
     ldh [rAUD4POLY], a
     ret
-.chan3: ; Must go last since it falls through
+.chan3:
     retMute 2
 
     ld a, c
     ld hl, current_wave
+    call update_ch3_waveform
+
+    ld b, 2
+    jp play_note
 
 update_ch3_waveform:
     ld [hl], a
@@ -803,6 +821,11 @@ update_ch3_waveform:
     sub l
     ld h, a
 
+    ldh a, [rAUDTERM]
+    push af
+    and %10111011
+    ldh [rAUDTERM], a
+
     xor a
     ldh [rAUD3ENA], a
 
@@ -813,6 +836,9 @@ ENDR
 
     ld a, %10000000
     ldh [rAUD3ENA], a
+
+    pop af
+    ldh [rAUDTERM], a
 
     ret
 
@@ -827,6 +853,12 @@ fx_set_speed:
     ld [ticks_per_row], a
     ret
 
+
+IF DEF(GBDK)
+_hUGE_set_position::
+    ld c, a
+    xor a
+ENDC
 
 hUGE_set_position::
 ;;; Processes (global) effect B, "position jump".
@@ -868,6 +900,7 @@ fx_note_cut:
 
     ;; check channel mute
 
+    ld a, b
     ;; 0 → $01, 1 → $02, 2 → $04, 3 → $05
     ;; Overall, these two instructions add 1 to the number.
     ;; However, the first instruction will generate a carry for inputs of $02 and $03;
@@ -886,8 +919,9 @@ fx_note_cut:
     rra
     ld d, a
     ld a, [mute_channels]
+    cpl
     and d
-    ret nz
+    ret z
 
     ;; fallthrough
 
@@ -1254,6 +1288,7 @@ fx_vol_slide:
 
     ;; check channel mute
 
+    ld a, b
     ;; 0 → $01, 1 → $02, 2 → $04, 3 → $05
     ;; Overall, these two instructions add 1 to the number.
     ;; However, the first instruction will generate a carry for inputs of $02 and $03;
@@ -1272,8 +1307,9 @@ fx_vol_slide:
     rra
     ld d, a
     ld a, [mute_channels]
+    cpl
     and d
-    ret nz
+    ret z
 
     ;; setup the up and down params
     ld a, c
@@ -1372,7 +1408,6 @@ setup_instrument_pointer:
     rla ; reset the Z flag
     ret
 
-_hUGE_dosound_banked::
 _hUGE_dosound::
 ;;; Ticks the sound engine once.
 ;;; Destroy: AF BC DE HL
@@ -1848,51 +1883,3 @@ ENDC
 
 note_table:
 include "include/hUGE_note_table.inc"
-
-
-IF DEF(GBDK)
-
-SECTION "hUGEDriver GBDK wrappers", ROM0
-
-_hUGE_init_banked::
-    ld hl, sp+2+4
-    jr continue_init
-_hUGE_init::
-    ld hl, sp+2
-continue_init:
-    push bc
-    ld a, [hl+]
-    ld h, [hl]
-    ld l, a
-    call hUGE_init
-    pop bc
-    ret
-
-_hUGE_mute_channel_banked::
-    ld hl, sp+3+4
-    jr continue_mute
-_hUGE_mute_channel::
-    ld hl, sp+3
-continue_mute:
-    push bc
-    ld a, [hl-]
-    and 1
-    ld c, a
-    ld b, [hl]
-    call hUGE_mute_channel
-    pop  bc
-    ret
-
-_hUGE_set_position_banked::
-    ld hl, sp+2+4
-    jr continue_set_position
-_hUGE_set_position::
-    ld hl, sp+2
-continue_set_position:
-    push bc
-    ld c, [hl]
-    call hUGE_set_position
-    pop  bc
-    ret
-
-ENDC
